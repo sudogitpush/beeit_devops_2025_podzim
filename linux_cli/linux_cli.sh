@@ -1,5 +1,6 @@
 #!/bin/bash
 
+EXIT_CODE=0
 LOG_FILE="logfile.log"
 ERROR_LOG="error.log"
 
@@ -14,6 +15,7 @@ logError()
 	echo "$1" >> "$LOG_FILE"
 	echo "$1" >> "$ERROR_LOG"
 	echo "$1" >&2
+	EXIT_CODE=1
 }
 
 create_link()
@@ -56,11 +58,21 @@ install_self_link()
 : << 'DO_NOT_UNCOMMENT'
 list_updates()
 {
-	if [ "$(id -u)" -eq 0 ]; then
-		apt list --upgradable
-	else 
-		echo "Only root authorized for updates."
-	fi
+    local output="$1"
+
+    if [ "$(id -u)" -ne 0 ]; then
+        echo "Only root authorized for updates." >&2
+        EXIT_CODE=1
+        return
+    fi
+
+    if [[ -n "$output" ]]; then
+        apt list --upgradable > "$output" 2>/dev/null
+    else
+        apt list --upgradable
+    fi
+
+    EXIT_CODE=$?
 }
 
 update_upgrade()
@@ -71,9 +83,9 @@ update_upgrade()
 		echo "Upgrade finished."
 	else
 		echo "Only root authorized for upgrades."
+		EXIT_CODE=1
 	fi
 }
-
 DO_NOT_UNCOMMENT
 
 find_be_e_files()
@@ -85,7 +97,6 @@ find_be_e_files()
         find ~/ -type f \( -name '*be*' -o -name '*e*' \) 2>/dev/null | head -n 5
     fi
 }
-
 
 monitor_system()
 {
@@ -114,15 +125,16 @@ Total proccesses: $t_p"
 help()
 {
 	echo "Script usage:"
-    echo "Use flags for running ft: create_link, list_updates, update_upgrate."
+    echo "Use flags for running ft: create_link, list_updates, update_upgrade."
     echo "Functions:"
-    echo "  create_link (flag -s)		- Creates a soft or hard link
+    echo "  create_link (flag -s)				- Creates a soft or hard link
 			- Correct input <file.txt> <soft/hardlink.txt> <soft/hard>"
-    echo "  list_updates (flag -a)		- Lists packages available for update"
-    echo "  update_upgrade (flag -f)	- Performs system update and upgrade"
-    echo "  find_be_e_files				- Finds files containing the letters be, e "
-	echo "  log							- Writes message to the log"
-	echo "  install_self_link			- Creates a ling to the scipt in /bin"
+    echo "  list_updates (flag -a)				- Lists packages available for update"
+	echo "  list updates (flag -f <file.txt>)  	- Save lsit of packages to file"
+	echo "  update_upgrade (flag -u)			- Performs system update and upgrade"
+    echo "  find_be_e_files						- Finds files containing the letters be, e"
+	echo "  log									- Writes message to the log"
+	echo "  install_self_link					- Creates a ling to the scipt in /bin"
 }
 
 while (( $# > 0 )); do
@@ -131,11 +143,16 @@ while (( $# > 0 )); do
 			help
 			shift
 			;;
-		# -a)
-		# 	list_updates
-		# 	shift
+        # -a)
+		# 	if [[ "$2" == "-f" ]]; then
+		# 		list_updates "$3"
+		# 		shift 3
+		# 	else
+		# 		list_updates
+		# 		shift
+		# 	fi
 		# 	;;
-		# -f)
+		# -u)
 		# 	update_upgrade
 		# 	shift
 		# 	;;
@@ -150,7 +167,8 @@ while (( $# > 0 )); do
 		*)
 			echo "Input correct flag"
 			help
-			exit 1
+			exit_CODE=1
+			exit $EXIT_CODE
 	esac
 done
 
@@ -158,6 +176,8 @@ log "Script started"
 install_self_link
 find_be_e_files
 monitor_system
+exit $EXIT_CODE
+
 
 
 
